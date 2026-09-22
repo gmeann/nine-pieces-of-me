@@ -299,17 +299,20 @@
   .admin-gate .modal-input{margin-bottom:0;flex:1;text-align:center;letter-spacing:.3em}
   .admin-error{margin-top:8px;font-size:11.5px;color:#b3261e;text-align:center}
   .admin-panel-title{font-weight:900;font-size:13px;color:var(--ink);text-align:center;margin-top:12px}
-  .donut-wrap{position:relative;width:132px;height:132px;margin:14px auto 4px}
-  .donut{width:100%;height:100%;border-radius:50%;background:#E5E1D6;transition:background .3s ease}
-  .donut-center{
-    position:absolute;inset:20px;background:var(--bg-card);border-radius:50%;
+  .usage-row{
+    display:flex;align-items:center;gap:12px;padding:12px 0;
+    border-top:1px solid rgba(27,27,22,.08);
+  }
+  .usage-row:first-of-type{border-top:0}
+  .usage-donut-wrap{position:relative;width:52px;height:52px;flex:none}
+  .usage-donut{width:100%;height:100%;border-radius:50%;background:#E5E1D6;transition:background .3s ease}
+  .usage-donut-label{
+    position:absolute;inset:8px;background:var(--bg-card);border-radius:50%;
     display:flex;align-items:center;justify-content:center;
-    font-weight:900;font-size:19px;color:var(--ink);
+    font-weight:900;font-size:10.5px;color:var(--ink);
   }
-  .admin-stats{
-    text-align:center;font-size:11.5px;color:rgba(27,27,22,.6);
-    line-height:1.6;margin-top:4px;
-  }
+  .usage-name{font-weight:900;font-size:12.5px;color:var(--ink)}
+  .usage-stats{font-size:11px;color:rgba(27,27,22,.6);line-height:1.5;margin-top:2px}
 </style>
 </head>
 <body>
@@ -443,12 +446,28 @@
         </div>
         <div class="admin-error hidden" id="adminError">암호가 올바르지 않아요</div>
         <div class="admin-panel hidden" id="adminPanel">
-          <div class="admin-panel-title">Unsplash 사용량 (이 브라우저 기준)</div>
-          <div class="donut-wrap">
-            <div class="donut" id="usageDonut"></div>
-            <div class="donut-center" id="usageDonutLabel">–</div>
+          <div class="admin-panel-title">사진 API 사용량 (이 브라우저 기준)</div>
+          <div class="usage-row" data-provider="unsplash">
+            <div class="usage-donut-wrap"><div class="usage-donut" id="donut-unsplash"></div><div class="usage-donut-label" id="donutLabel-unsplash">–</div></div>
+            <div>
+              <div class="usage-name">Unsplash</div>
+              <div class="usage-stats" id="stats-unsplash">아직 요청 기록이 없어요</div>
+            </div>
           </div>
-          <div class="admin-stats" id="usageStats">아직 요청 기록이 없어요</div>
+          <div class="usage-row" data-provider="pexels">
+            <div class="usage-donut-wrap"><div class="usage-donut" id="donut-pexels"></div><div class="usage-donut-label" id="donutLabel-pexels">–</div></div>
+            <div>
+              <div class="usage-name">Pexels</div>
+              <div class="usage-stats" id="stats-pexels">아직 요청 기록이 없어요</div>
+            </div>
+          </div>
+          <div class="usage-row" data-provider="pixabay">
+            <div class="usage-donut-wrap"><div class="usage-donut" id="donut-pixabay"></div><div class="usage-donut-label" id="donutLabel-pixabay">–</div></div>
+            <div>
+              <div class="usage-name">Pixabay</div>
+              <div class="usage-stats" id="stats-pixabay">아직 요청 기록이 없어요</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -555,7 +574,7 @@
   // key comfortably covers everyone). Empty string = provider skipped, so
   // this is safe to ship ahead of actually having the keys: fetchPhotoFor()
   // just falls through to the next provider exactly as it does today.
-  const SHARED_PEXELS_KEY = '';
+  const SHARED_PEXELS_KEY = '0ElXKethJSX4qkcudRauZ1ejf3k6p4WlAjAyoXghO5OImEsxgPO3tVZj';
   const SHARED_PIXABAY_KEY = '57687298-46167c1c262d06eaebe190ce9';
   function getPexelsKey() { return SHARED_PEXELS_KEY; }
   function getPixabayKey() { return SHARED_PIXABAY_KEY; }
@@ -582,22 +601,27 @@
     writeCache(c);
   }
 
-  // Unsplash returns the live rate-limit state on every API response
-  // (X-Ratelimit-Limit / X-Ratelimit-Remaining, whole-hour window). Saving
-  // it here is what powers the admin usage donut — no separate counter,
-  // no guessing, straight from Unsplash's own numbers for this key.
-  function captureRateLimit(res) {
+  // Unsplash and Pexels both return the live rate-limit state on every API
+  // response (X-Ratelimit-Limit / X-Ratelimit-Remaining). Saving it here
+  // per-provider is what powers the admin usage panel — no separate
+  // counter, no guessing, straight from each API's own numbers for this
+  // key. Pixabay doesn't document an equivalent header; its row simply
+  // stays "no data yet" rather than showing a guessed number.
+  function readRateLimits() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY_RATELIMIT) || '{}'); } catch { return {}; }
+  }
+  function captureRateLimit(provider, res) {
     try {
       const limit = res.headers.get('X-Ratelimit-Limit');
       const remaining = res.headers.get('X-Ratelimit-Remaining');
       if (limit == null || remaining == null) return;
-      localStorage.setItem(LS_KEY_RATELIMIT, JSON.stringify({
-        limit: Number(limit), remaining: Number(remaining), checkedAt: Date.now(),
-      }));
+      const all = readRateLimits();
+      all[provider] = { limit: Number(limit), remaining: Number(remaining), checkedAt: Date.now() };
+      localStorage.setItem(LS_KEY_RATELIMIT, JSON.stringify(all));
     } catch {}
   }
-  function getRateLimit() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY_RATELIMIT) || 'null'); } catch { return null; }
+  function getRateLimit(provider) {
+    return readRateLimits()[provider] || null;
   }
 
   // ---------------------------------------------------------------------
@@ -752,7 +776,7 @@
     const enWord = KO_EN_MAP[word] || word;
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(enWord)}&per_page=3&page=${page}&orientation=squarish`;
     const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
-    captureRateLimit(res);
+    captureRateLimit('unsplash', res);
     if (!res.ok) throw new Error('unsplash http ' + res.status);
     const data = await res.json();
     const pick = data.results && data.results[Math.floor(Math.random() * Math.min(3, data.results.length))];
@@ -781,6 +805,7 @@
     const enWord = KO_EN_MAP[word] || word;
     const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(enWord)}&per_page=1&orientation=square`;
     const res = await fetch(url, { headers: { Authorization: key } });
+    captureRateLimit('pexels', res);
     if (!res.ok) throw new Error('pexels http ' + res.status);
     const data = await res.json();
     const pick = data.photos && data.photos[0];
@@ -804,6 +829,7 @@
     const enWord = KO_EN_MAP[word] || word;
     const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(enWord)}&image_type=photo&per_page=3&safesearch=true`;
     const res = await fetch(url);
+    captureRateLimit('pixabay', res);
     if (!res.ok) throw new Error('pixabay http ' + res.status);
     const data = await res.json();
     const pick = data.hits && data.hits[0];
@@ -849,7 +875,7 @@
     const key = getApiKey();
     if (!key || !state || !state.downloadLocation) return;
     fetch(state.downloadLocation, { headers: { Authorization: `Client-ID ${key}` } })
-      .then(captureRateLimit)
+      .then((res) => captureRateLimit('unsplash', res))
       .catch(() => {});
   }
 
@@ -1209,26 +1235,31 @@
 
   function showAdminPanel() {
     adminPanel.classList.remove('hidden');
-    renderUsageDonut();
+    renderUsagePanel();
   }
 
-  function renderUsageDonut() {
-    const rl = getRateLimit();
-    const donut = document.getElementById('usageDonut');
-    const label = document.getElementById('usageDonutLabel');
-    const stats = document.getElementById('usageStats');
-    if (!rl || !rl.limit) {
-      donut.style.background = '#E5E1D6';
-      label.textContent = '–';
-      stats.textContent = '이 브라우저에서 아직 Unsplash에 요청한 적이 없어요.';
-      return;
+  const USAGE_PROVIDERS = ['unsplash', 'pexels', 'pixabay'];
+
+  function renderUsagePanel() {
+    for (const provider of USAGE_PROVIDERS) {
+      const donut = document.getElementById('donut-' + provider);
+      const label = document.getElementById('donutLabel-' + provider);
+      const stats = document.getElementById('stats-' + provider);
+      if (!donut) continue;
+      const rl = getRateLimit(provider);
+      if (!rl || !rl.limit) {
+        donut.style.background = '#E5E1D6';
+        label.textContent = '–';
+        stats.textContent = '아직 요청 기록이 없어요';
+        continue;
+      }
+      const used = Math.max(0, rl.limit - rl.remaining);
+      const pct = Math.max(0, Math.min(100, Math.round((used / rl.limit) * 100)));
+      donut.style.background = `conic-gradient(var(--accent-a) 0% ${pct}%, #E5E1D6 ${pct}% 100%)`;
+      label.textContent = pct + '%';
+      const when = new Date(rl.checkedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      stats.textContent = `${used}/${rl.limit}건 (남음 ${rl.remaining}) · ${when} 기준`;
     }
-    const used = Math.max(0, rl.limit - rl.remaining);
-    const pct = Math.max(0, Math.min(100, Math.round((used / rl.limit) * 100)));
-    donut.style.background = `conic-gradient(var(--accent-a) 0% ${pct}%, #E5E1D6 ${pct}% 100%)`;
-    label.textContent = pct + '%';
-    const when = new Date(rl.checkedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    stats.textContent = `사용 ${used} / 한도 ${rl.limit}건 (남음 ${rl.remaining}) · ${when} 기준 · 매시 정각 초기화`;
   }
 })();
 </script>
