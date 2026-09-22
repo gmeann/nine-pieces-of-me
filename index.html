@@ -313,6 +313,7 @@
   }
   .usage-name{font-weight:900;font-size:12.5px;color:var(--ink)}
   .usage-stats{font-size:11px;color:rgba(27,27,22,.6);line-height:1.5;margin-top:2px}
+  .usage-note{font-size:11px;color:rgba(27,27,22,.55);line-height:1.55;margin:2px 0 4px}
 </style>
 </head>
 <body>
@@ -446,28 +447,34 @@
         </div>
         <div class="admin-error hidden" id="adminError">암호가 올바르지 않아요</div>
         <div class="admin-panel hidden" id="adminPanel">
-          <div class="admin-panel-title">사진 API 사용량 (이 브라우저 기준)</div>
+          <div class="admin-panel-title">사진 API 사용량 (전체 방문자 공용 키)</div>
+          <p class="usage-note">
+            한도는 키 하나를 모든 방문자가 같이 쓰는 진짜 전역 수치예요. 다만 실시간 조회 API가 없어서,
+            이 브라우저가 <b>마지막으로 실제 호출했을 때</b> 서버가 알려준 값을 스냅샷으로 보여드려요 —
+            그새 다른 방문자가 더 썼을 수 있으니 정확한 지금 값은 아래 새로고침으로 확인하세요.
+          </p>
           <div class="usage-row" data-provider="unsplash">
             <div class="usage-donut-wrap"><div class="usage-donut" id="donut-unsplash"></div><div class="usage-donut-label" id="donutLabel-unsplash">–</div></div>
             <div>
               <div class="usage-name">Unsplash</div>
-              <div class="usage-stats" id="stats-unsplash">아직 요청 기록이 없어요</div>
+              <div class="usage-stats" id="stats-unsplash">이 브라우저에서 아직 확인 안 함</div>
             </div>
           </div>
           <div class="usage-row" data-provider="pexels">
             <div class="usage-donut-wrap"><div class="usage-donut" id="donut-pexels"></div><div class="usage-donut-label" id="donutLabel-pexels">–</div></div>
             <div>
               <div class="usage-name">Pexels</div>
-              <div class="usage-stats" id="stats-pexels">아직 요청 기록이 없어요</div>
+              <div class="usage-stats" id="stats-pexels">이 브라우저에서 아직 확인 안 함</div>
             </div>
           </div>
           <div class="usage-row" data-provider="pixabay">
             <div class="usage-donut-wrap"><div class="usage-donut" id="donut-pixabay"></div><div class="usage-donut-label" id="donutLabel-pixabay">–</div></div>
             <div>
               <div class="usage-name">Pixabay</div>
-              <div class="usage-stats" id="stats-pixabay">아직 요청 기록이 없어요</div>
+              <div class="usage-stats" id="stats-pixabay">이 브라우저에서 아직 확인 안 함</div>
             </div>
           </div>
+          <button class="btn-secondary" id="usageRefreshBtn" type="button" style="width:100%;margin-top:10px">지금 새로고침 (각 사이트 1건씩 실제 호출)</button>
         </div>
       </div>
     </div>
@@ -612,11 +619,21 @@
   }
   function captureRateLimit(provider, res) {
     try {
+      const all = readRateLimits();
+      const prev = all[provider] || {};
+      // attemptedAt is recorded even when no rate-limit headers come back
+      // (Pixabay never sends them) -- that's what lets the admin panel
+      // tell "never checked" apart from "checked, but this API doesn't
+      // report usage" instead of showing the same blank state for both.
+      const next = { ...prev, attemptedAt: Date.now() };
       const limit = res.headers.get('X-Ratelimit-Limit');
       const remaining = res.headers.get('X-Ratelimit-Remaining');
-      if (limit == null || remaining == null) return;
-      const all = readRateLimits();
-      all[provider] = { limit: Number(limit), remaining: Number(remaining), checkedAt: Date.now() };
+      if (limit != null && remaining != null) {
+        next.limit = Number(limit);
+        next.remaining = Number(remaining);
+        next.checkedAt = Date.now();
+      }
+      all[provider] = next;
       localStorage.setItem(LS_KEY_RATELIMIT, JSON.stringify(all));
     } catch {}
   }
@@ -1247,10 +1264,19 @@
       const stats = document.getElementById('stats-' + provider);
       if (!donut) continue;
       const rl = getRateLimit(provider);
-      if (!rl || !rl.limit) {
+      if (!rl || !rl.attemptedAt) {
         donut.style.background = '#E5E1D6';
         label.textContent = '–';
-        stats.textContent = '아직 요청 기록이 없어요';
+        stats.textContent = '이 브라우저에서 아직 확인 안 함';
+        continue;
+      }
+      if (!rl.limit) {
+        // A live call went through, but this API sent back no
+        // rate-limit headers to read (Pixabay) -- distinct from
+        // "never checked" above, so it doesn't look like a bug.
+        donut.style.background = '#E5E1D6';
+        label.textContent = '–';
+        stats.textContent = '사용량 정보를 제공하지 않는 API예요';
         continue;
       }
       const used = Math.max(0, rl.limit - rl.remaining);
@@ -1258,9 +1284,27 @@
       donut.style.background = `conic-gradient(var(--accent-a) 0% ${pct}%, #E5E1D6 ${pct}% 100%)`;
       label.textContent = pct + '%';
       const when = new Date(rl.checkedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-      stats.textContent = `${used}/${rl.limit}건 (남음 ${rl.remaining}) · ${when} 기준`;
+      stats.textContent = `${used}/${rl.limit}건 (남음 ${rl.remaining}) · ${when} 확인`;
     }
   }
+
+  document.getElementById('usageRefreshBtn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '확인 중…';
+    // Deliberately bypasses seed/cache -- the whole point is to spend one
+    // real request per provider so their response headers give a fresh
+    // reading, not the fastest path to a photo.
+    await Promise.allSettled([
+      fetchFromUnsplash('nature', {}),
+      fetchFromPexels('nature'),
+      fetchFromPixabay('nature'),
+    ]);
+    renderUsagePanel();
+    btn.disabled = false;
+    btn.textContent = original;
+  });
 })();
 </script>
 </body>
