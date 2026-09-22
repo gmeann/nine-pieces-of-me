@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>아홉 조각의 나</title>
+<meta name="description" content="오늘 자기 전, 나를 그려보기 — AI와 함께 만드는 9조각 자화상 콜라주">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent-a:#7D97AC;
+    --accent-b:#90928B;
+    --ink:#1B1B16;
+    --bg-page:#EFEAE0;
+    --bg-card:#FDFBF7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg-page)}
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  button,input,textarea{font-family:inherit}
+  #app-shell{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100dvh;
+    position:relative;
+    background:var(--bg-page);
+    overflow:hidden;
+  }
+  @media (min-width:481px){
+    #app-shell{
+      box-shadow:0 24px 70px rgba(20,20,10,.22);
+      min-height:100vh;
+    }
+  }
+
+  /* ---------- shared bits ---------- */
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:7px 15px;border-radius:999px;
+    font-weight:700;font-size:12px;letter-spacing:.02em;
+    color:#fff;white-space:nowrap;
+    box-shadow:0 6px 14px rgba(0,0,0,.18);
+    transform:rotate(-3deg);
+  }
+  .idx{
+    font-weight:700;font-size:12px;letter-spacing:.12em;
+    color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.4);
+    white-space:nowrap;flex:none;
+  }
+  .idx.dark{color:var(--ink);text-shadow:none}
+  .icon-btn{
+    appearance:none;border:0;cursor:pointer;
+    width:30px;height:30px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.85);color:var(--ink);
+    font-size:14px;font-weight:700;
+    box-shadow:0 6px 14px rgba(0,0,0,.18);
+    flex:none;
+  }
+  .icon-btn.on-light{background:#F0EBE1}
+  .topbar{
+    position:absolute;top:24px;left:24px;right:24px;z-index:3;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .topbar .right-group{display:flex;align-items:center;gap:8px}
+  .word-headline{
+    font-family:'Black Han Sans',sans-serif;color:#fff;line-height:1.15;
+    text-shadow:0 2px 10px rgba(0,0,0,.25);
+  }
+  .btn-primary{
+    display:block;width:100%;text-align:center;
+    background:var(--accent-a);color:#fff;font-weight:700;font-size:14px;
+    border:0;border-radius:999px;padding:14px;cursor:pointer;
+  }
+  .btn-primary:active{filter:brightness(.94)}
+  .btn-ghost-light{
+    display:inline-flex;align-items:center;gap:6px;
+    background:transparent;border:0;color:rgba(255,255,255,.92);
+    font-weight:700;font-size:13px;letter-spacing:.01em;
+    text-decoration:underline;text-underline-offset:3px;
+    cursor:pointer;padding:10px 4px;
+  }
+  .screen{display:none}
+  .screen.active{
+    display:flex;flex-direction:column;min-height:100dvh;
+    position:relative;
+  }
+
+  /* ---------- COVER ---------- */
+  #screen-cover{
+    background:
+      radial-gradient(120% 70% at 20% 0%, rgba(255,255,255,.35), transparent 60%),
+      linear-gradient(165deg, var(--accent-a) 0%, #E3DCCD 52%, var(--accent-b) 130%);
+    justify-content:center;
+  }
+  .cover-center{
+    position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);
+    z-index:3;text-align:center;
+  }
+  .cover-card{
+    display:inline-block;background:rgba(253,251,247,.88);
+    border-radius:20px;padding:26px 26px 24px;
+    box-shadow:0 12px 34px rgba(20,16,10,.14);
+  }
+  .cover-title{
+    font-family:'Gowun Batang',serif;font-weight:700;font-size:38px;
+    color:var(--ink);line-height:1.4;
+  }
+  .cover-sub{
+    margin-top:10px;font-family:'Gowun Batang',serif;
+    color:rgba(27,27,22,.7);font-size:15px;
+  }
+  .cover-start{margin-top:22px}
+  .cover-foot{
+    position:absolute;left:24px;right:24px;bottom:26px;z-index:3;
+    display:flex;justify-content:space-between;
+    color:rgba(255,255,255,.8);font-size:10.5px;font-weight:700;letter-spacing:.14em;
+  }
+
+  /* ---------- STEP screens ---------- */
+  .step-bg{position:relative;flex:1;display:flex;flex-direction:column}
+  #screen-step1 .step-bg{
+    background:linear-gradient(165deg, var(--accent-b) 0%, #CFCFC4 55%, var(--bg-page) 130%);
+  }
+  #screen-step2 .step-bg{
+    background:linear-gradient(165deg, var(--accent-a) 0%, #B9C6D1 55%, var(--bg-page) 130%);
+  }
+  .step-headline{
+    position:absolute;left:24px;right:24px;top:150px;z-index:3;
+  }
+  .step-headline .word-headline{font-size:32px}
+  .step-card-wrap{
+    position:absolute;left:20px;right:20px;top:52%;transform:translateY(-45%);
+    z-index:4;
+  }
+  .step-card{
+    background:var(--bg-card);border-radius:22px;
+    box-shadow:0 20px 50px rgba(0,0,0,.28);
+    box-sizing:border-box;display:flex;flex-direction:column;
+  }
+  .step-card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .step-card-title{font-weight:900;font-size:13px;color:var(--ink);letter-spacing:.02em}
+  .copy-box{
+    flex:1;max-height:44vh;overflow-y:auto;
+    background:#F5F1E9;border:1px solid rgba(27,27,22,.08);border-radius:14px;
+    padding:16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:12.5px;line-height:1.85;color:var(--ink);white-space:pre-line;
+  }
+  .copy-cta{margin-top:14px}
+  .step-next-link{display:flex;justify-content:center}
+
+  .paste-box{
+    border:1.5px dashed rgba(27,27,22,.25);border-radius:16px;
+    padding:14px;background:#fff;
+  }
+  .paste-box textarea{
+    display:block;width:100%;min-height:118px;border:0;outline:0;resize:vertical;
+    background:transparent;color:var(--ink);font-size:14px;line-height:1.6;
+    font-family:'Noto Sans KR',sans-serif;
+  }
+  .paste-box textarea::placeholder{color:rgba(27,27,22,.4)}
+  .paste-tools{
+    margin-top:10px;display:flex;justify-content:flex-end;
+  }
+  .clip-pill{
+    display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+    color:var(--accent-b);border:1px solid var(--accent-b);border-radius:999px;
+    padding:5px 12px;background:transparent;cursor:pointer;
+  }
+
+  /* ---------- RESULT ---------- */
+  #screen-result{background:var(--bg-card)}
+  .result-header{
+    height:96px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 24px;box-sizing:border-box;position:relative;z-index:3;flex:none;
+  }
+  .result-grid{
+    flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    gap:1px;background:rgba(27,27,22,.06);
+  }
+  .cell{
+    position:relative;background:var(--bg-card);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    overflow:hidden;
+  }
+  .cell-tag{
+    position:absolute;top:8px;left:8px;color:#fff;font-size:8px;font-weight:700;
+    padding:3px 7px;border-radius:999px;z-index:2;
+  }
+  .cell-refresh{
+    position:absolute;top:7px;right:7px;width:18px;height:18px;border-radius:50%;
+    background:rgba(255,255,255,.88);border:1.4px solid rgba(27,27,22,.15);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;
+    font-size:9px;color:var(--accent-b);
+  }
+  .cell-count{
+    position:absolute;top:27px;right:7px;color:rgba(27,27,22,.34);font-size:7px;font-weight:700;z-index:2;
+  }
+  .cell-empty-icon{
+    width:26px;height:26px;border:2px solid;border-radius:8px;position:relative;
+  }
+  .cell-empty-icon::after{
+    content:'';position:absolute;top:4px;left:4px;width:6px;height:6px;border-radius:50%;background:currentColor;
+  }
+  .cell-caption{color:rgba(27,27,22,.42);font-size:9.5px;font-weight:600}
+  .cell-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+  .cell-loading{
+    width:18px;height:18px;border-radius:50%;
+    border:2px solid rgba(27,27,22,.18);border-top-color:var(--accent-a);
+    animation:np-spin .7s linear infinite;
+  }
+  @keyframes np-spin{to{transform:rotate(360deg)}}
+  .cell-credit{
+    position:absolute;left:5px;bottom:5px;right:5px;z-index:2;
+    font-size:7.5px;line-height:1.3;color:#fff;
+    background:rgba(0,0,0,.45);border-radius:5px;padding:2px 5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cell-credit a{color:inherit;text-decoration:underline}
+
+  .result-footer{
+    flex:none;height:64px;background:rgba(255,251,247,.97);
+    box-shadow:0 -6px 18px rgba(0,0,0,.08);
+    display:flex;align-items:center;justify-content:center;gap:12px;z-index:4;
+  }
+  .foot-btn{
+    display:flex;align-items:center;gap:6px;padding:10px 18px;border-radius:999px;
+    font-weight:700;font-size:12.5px;border:0;cursor:pointer;
+  }
+  .foot-btn.primary{background:var(--accent-a);color:#fff}
+  .foot-btn.secondary{background:#F0EFEA;color:#4A4A45;border:1px solid rgba(0,0,0,.08)}
+  .result-toast{
+    position:absolute;left:50%;bottom:78px;transform:translateX(-50%);
+    background:rgba(20,16,10,.85);color:#fff;font-size:12px;font-weight:600;
+    padding:8px 16px;border-radius:999px;z-index:6;opacity:0;pointer-events:none;
+    transition:opacity .2s ease;white-space:nowrap;
+  }
+  .result-toast.show{opacity:1}
+
+  /* ---------- modal (settings) ---------- */
+  .modal-scrim{
+    position:fixed;inset:0;background:rgba(20,16,10,.4);
+    display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;
+  }
+  .modal-scrim.hidden{display:none}
+  .modal-card{
+    width:100%;max-width:340px;background:var(--bg-card);border-radius:22px;
+    padding:22px 20px;box-shadow:0 20px 50px rgba(0,0,0,.3);
+  }
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .modal-title{font-weight:900;font-size:14px;color:var(--ink)}
+  .modal-desc{font-size:12.5px;line-height:1.6;color:rgba(27,27,22,.65);margin:0 0 14px}
+  .modal-input{
+    width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(27,27,22,.16);
+    font-size:13px;color:var(--ink);margin-bottom:14px;background:#fff;
+  }
+  .modal-actions{display:flex;gap:8px}
+  .btn-secondary{
+    flex:1;background:#F0EFEA;color:#4A4A45;border:1px solid rgba(0,0,0,.08);
+    border-radius:999px;padding:12px;font-weight:700;font-size:13px;cursor:pointer;
+  }
+  .modal-actions .btn-primary{flex:1}
+  .modal-note{margin-top:12px;font-size:11px;color:rgba(27,27,22,.5);line-height:1.5}
+  .modal-note a{color:var(--accent-a)}
+</style>
+</head>
+<body>
+<div id="app-shell">
+
+  <!-- SCREEN 0: COVER -->
+  <section id="screen-cover" class="screen active" data-screen="cover">
+    <div class="topbar">
+      <div class="pill" style="background:var(--accent-a)">AI × ME</div>
+      <div class="right-group">
+        <button class="icon-btn" id="settingsBtnCover" aria-label="설정" title="Unsplash 설정">⚙</button>
+        <div class="idx">00 · 04</div>
+      </div>
+    </div>
+    <div class="cover-center">
+      <div class="cover-card">
+        <div class="cover-title">아홉 조각의 나</div>
+        <div class="cover-sub">오늘 자기 전, 나를 그려보기</div>
+        <div class="cover-start">
+          <button class="btn-primary" id="startBtn" style="padding:12px 26px;width:auto;display:inline-block">시작하기</button>
+        </div>
+      </div>
+    </div>
+    <div class="cover-foot">
+      <span>SELF PORTRAIT</span>
+      <span>PAGE 00</span>
+    </div>
+  </section>
+
+  <!-- SCREEN 1: STEP 01 -->
+  <section id="screen-step1" class="screen" data-screen="step1">
+    <div class="step-bg">
+      <div class="topbar">
+        <div class="pill" style="background:var(--accent-b)">STEP 01 · 복사</div>
+        <div class="idx">01 · 04</div>
+      </div>
+      <div class="step-headline">
+        <div class="word-headline">질문을 복사해서,<br>AI에게 물어보세요</div>
+      </div>
+      <div class="step-card-wrap">
+        <div class="step-card" style="padding:22px 20px 20px">
+          <div class="step-card-head">
+            <div class="step-card-title">복사 문구</div>
+            <button class="icon-btn on-light" data-goto="cover" aria-label="닫기" style="width:22px;height:22px;font-size:12px">✕</button>
+          </div>
+          <div class="copy-box" id="copyBlockText"></div>
+          <button class="btn-primary copy-cta" id="copyAllBtn">전체 복사</button>
+        </div>
+        <div class="step-next-link">
+          <button class="btn-ghost-light" data-goto="step2">다음 단계로 →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 2: STEP 02 -->
+  <section id="screen-step2" class="screen" data-screen="step2">
+    <div class="step-bg">
+      <div class="topbar">
+        <div class="pill" style="background:var(--accent-a)">STEP 02 · 붙여넣기</div>
+        <div class="idx">02 · 04</div>
+      </div>
+      <div class="step-headline">
+        <div class="word-headline" style="font-size:34px">받은 답변을<br>붙여넣으세요</div>
+      </div>
+      <div class="step-card-wrap">
+        <div class="step-card" style="padding:24px 20px;gap:16px">
+          <div class="step-card-head" style="margin-bottom:0">
+            <div class="step-card-title">AI 답변 붙여넣기</div>
+            <button class="icon-btn on-light" data-goto="step1" aria-label="닫기" style="width:22px;height:22px;font-size:12px">✕</button>
+          </div>
+          <div class="paste-box">
+            <textarea id="pasteInput" placeholder="여기에 AI가 알려준 답변을&#10;붙여넣어보세요…"></textarea>
+            <div class="paste-tools">
+              <button class="clip-pill" id="clipPasteBtn"><span style="font-size:13px">⧉</span> 붙여넣기</button>
+            </div>
+          </div>
+          <button class="btn-primary" id="parseNextBtn">다음</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 3: RESULT -->
+  <section id="screen-result" class="screen" data-screen="result">
+    <div class="result-header">
+      <div class="pill" style="background:var(--accent-b)">RESULT · 콜라주</div>
+      <div class="right-group">
+        <button class="icon-btn" id="restartBtn" aria-label="다시하기" title="처음부터 다시하기" style="font-size:12px">↺</button>
+        <button class="icon-btn" id="settingsBtnResult" aria-label="설정" title="Unsplash 설정" style="font-size:12px">⚙</button>
+        <div class="idx dark">03 · 04</div>
+      </div>
+    </div>
+    <div class="result-grid" id="resultGrid"></div>
+    <div class="result-footer">
+      <button class="foot-btn primary" id="saveImgBtn">
+        <span aria-hidden="true">⬇</span> 이미지 저장
+      </button>
+      <button class="foot-btn secondary" id="copyImgBtn">
+        <span aria-hidden="true">⧉</span> 복사하기
+      </button>
+    </div>
+    <div class="result-toast" id="resultToast"></div>
+  </section>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-scrim hidden" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title">Unsplash API 키</div>
+        <button class="icon-btn on-light" id="closeSettingsBtn" aria-label="닫기" style="width:22px;height:22px;font-size:12px">✕</button>
+      </div>
+      <p class="modal-desc">
+        결과 화면에서 9개 단어에 맞는 실제 사진을 보여주려면 Unsplash Access Key가 필요해요.
+        키는 <b>이 브라우저에만</b> 저장되고 서버로 전송되거나 코드에 저장되지 않아요.
+        키가 없으면 단어 기반 그라데이션 카드로 대신 보여드려요.
+      </p>
+      <input class="modal-input" id="apiKeyInput" type="text" placeholder="Unsplash Access Key" autocomplete="off" spellcheck="false">
+      <div class="modal-actions">
+        <button class="btn-secondary" id="clearKeyBtn">삭제</button>
+        <button class="btn-primary" id="saveKeyBtn" style="width:auto">저장</button>
+      </div>
+      <p class="modal-note">키가 없으신가요? <a href="https://unsplash.com/developers" target="_blank" rel="noopener noreferrer">unsplash.com/developers</a>에서 무료로 발급받을 수 있어요.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------------------------------------------------------------------
+  // Fixed content (order never changes — see design_handoff README)
+  // ---------------------------------------------------------------------
+  const QUESTIONS = [
+    { q: '나는 무슨 꽃이야?', label: '꽃' },
+    { q: '나는 무슨 색이야?', label: '색' },
+    { q: '나는 어떤 날씨야?', label: '날씨' },
+    { q: '나는 어떤 음식이야?', label: '음식' },
+    { q: '나는 어떤 동물이야?', label: '동물' },
+    { q: '나의 장점은?', label: '장점' },
+    { q: '나의 단점은?', label: '단점' },
+    { q: '나의 가장 큰 행복은?', label: '행복' },
+    { q: '나 어때보여?', label: '느낌' },
+  ];
+
+  const COPY_BLOCK =
+    '내 질문에 한 단어로 대답해줘.\n' +
+    QUESTIONS.map((item, i) => `${i + 1}. ${item.q}`).join('\n');
+
+  // Small built-in KO -> EN dictionary to improve Unsplash hit rate.
+  // Falls back to the raw Korean string when a word isn't listed.
+  const KO_EN_MAP = {
+    // flowers
+    '장미': 'rose', '해바라기': 'sunflower', '튤립': 'tulip', '벚꽃': 'cherry blossom',
+    '코스모스': 'cosmos flower', '국화': 'chrysanthemum', '백합': 'lily', '데이지': 'daisy',
+    '라벤더': 'lavender', '수국': 'hydrangea', '민들레': 'dandelion', '카네이션': 'carnation',
+    '무궁화': 'hibiscus', '난초': 'orchid', '목련': 'magnolia', '진달래': 'azalea',
+    // colors
+    '빨강': 'red', '빨간색': 'red', '파랑': 'blue', '파란색': 'blue', '노랑': 'yellow',
+    '노란색': 'yellow', '초록': 'green', '초록색': 'green', '보라': 'purple', '보라색': 'purple',
+    '분홍': 'pink', '분홍색': 'pink', '주황': 'orange', '주황색': 'orange', '하양': 'white',
+    '하얀색': 'white', '검정': 'black', '검은색': 'black', '회색': 'gray', '갈색': 'brown',
+    '하늘색': 'sky blue', '민트': 'mint green', '금색': 'gold', '은색': 'silver', '베이지': 'beige',
+    // weather
+    '맑음': 'sunny sky', '흐림': 'cloudy sky', '비': 'rainy day', '눈': 'snowy day',
+    '바람': 'windy', '폭풍': 'storm', '안개': 'foggy', '무지개': 'rainbow',
+    '포근함': 'warm weather', '화창함': 'sunny weather', '쌀쌀함': 'chilly weather', '따뜻함': 'warm sunlight',
+    // foods
+    '라면': 'ramen', '김치': 'kimchi', '떡볶이': 'tteokbokki', '피자': 'pizza',
+    '치킨': 'fried chicken', '초콜릿': 'chocolate', '아이스크림': 'ice cream', '커피': 'coffee',
+    '케이크': 'cake', '빵': 'bread', '과일': 'fruit', '수박': 'watermelon', '딸기': 'strawberry',
+    '포도': 'grapes', '사과': 'apple', '바나나': 'banana', '파스타': 'pasta', '초밥': 'sushi',
+    '삼겹살': 'grilled pork belly', '떡': 'rice cake',
+    // animals
+    '강아지': 'puppy', '고양이': 'cat', '토끼': 'rabbit', '곰': 'bear', '사자': 'lion',
+    '호랑이': 'tiger', '여우': 'fox', '판다': 'panda', '다람쥐': 'squirrel', '고래': 'whale',
+    '돌고래': 'dolphin', '부엉이': 'owl', '나비': 'butterfly', '공룡': 'dinosaur', '사슴': 'deer',
+    '펭귄': 'penguin', '코알라': 'koala', '늑대': 'wolf', '거북이': 'turtle', '햄스터': 'hamster',
+    // traits / feelings
+    '다정함': 'kindness', '성실함': 'diligence', '긍정적': 'positivity', '게으름': 'laziness',
+    '예민함': 'sensitivity', '소심함': 'shyness', '자유로움': 'freedom', '따뜻함': 'warmth',
+    '행복': 'happiness', '평온함': 'calm', '설렘': 'excitement', '그리움': 'longing',
+    '편안함': 'comfort', '신비로움': 'mystery', '몽환적': 'dreamy', '솔직함': 'honesty',
+  };
+
+  // ---------------------------------------------------------------------
+  // Persistence helpers (all client-side; never sent anywhere)
+  // ---------------------------------------------------------------------
+  const LS_KEY_API = 'ninePieces.unsplashKey';
+  const LS_KEY_CACHE = 'ninePieces.photoCache';
+
+  function getApiKey() {
+    try { return localStorage.getItem(LS_KEY_API) || ''; } catch { return ''; }
+  }
+  function setApiKey(v) {
+    try {
+      if (v) localStorage.setItem(LS_KEY_API, v);
+      else localStorage.removeItem(LS_KEY_API);
+    } catch {}
+  }
+  function readCache() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY_CACHE) || '{}'); } catch { return {}; }
+  }
+  function writeCache(cache) {
+    try { localStorage.setItem(LS_KEY_CACHE, JSON.stringify(cache)); } catch {}
+  }
+  function getCached(word) {
+    const c = readCache();
+    return c[word] || null;
+  }
+  function setCached(word, val) {
+    const c = readCache();
+    c[word] = val;
+    writeCache(c);
+  }
+
+  // ---------------------------------------------------------------------
+  // Navigation
+  // ---------------------------------------------------------------------
+  const screens = Array.from(document.querySelectorAll('.screen'));
+  function goto(name) {
+    screens.forEach((s) => s.classList.toggle('active', s.dataset.screen === name));
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('[data-goto]').forEach((el) => {
+    el.addEventListener('click', () => goto(el.dataset.goto));
+  });
+  document.getElementById('startBtn').addEventListener('click', () => goto('step1'));
+  document.getElementById('restartBtn').addEventListener('click', () => {
+    answers = new Array(9).fill('—');
+    document.getElementById('pasteInput').value = '';
+    goto('cover');
+  });
+
+  // ---------------------------------------------------------------------
+  // STEP 01 — copy block
+  // ---------------------------------------------------------------------
+  document.getElementById('copyBlockText').textContent = COPY_BLOCK;
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        return true;
+      } catch { return false; }
+    }
+  }
+
+  const copyAllBtn = document.getElementById('copyAllBtn');
+  copyAllBtn.addEventListener('click', async () => {
+    const ok = await copyText(COPY_BLOCK);
+    const original = '전체 복사';
+    copyAllBtn.textContent = ok ? '복사 완료 ✓' : '복사할 수 없어요';
+    setTimeout(() => { copyAllBtn.textContent = original; }, 1600);
+  });
+
+  // ---------------------------------------------------------------------
+  // STEP 02 — paste + parse
+  // ---------------------------------------------------------------------
+  const pasteInput = document.getElementById('pasteInput');
+
+  document.getElementById('clipPasteBtn').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) pasteInput.value = text;
+      pasteInput.focus();
+    } catch {
+      pasteInput.focus();
+    }
+  });
+
+  // Strips leading numbering (1. / 1) / ① / Q: / A: / 답:) and drops
+  // stray question lines that got pasted back in along with the answers.
+  const PREFIX_RE = /^\s*(\d+[.)]\s*|[①②③④⑤⑥⑦⑧⑨]\s*|q\s*[:：]\s*|a\s*[:：]\s*|답\s*[:：]\s*)/i;
+  function parseAnswers(raw) {
+    const lines = raw.split(/\r?\n/);
+    const valid = [];
+    for (const line of lines) {
+      let t = line.trim();
+      if (!t) continue;
+      t = t.replace(PREFIX_RE, '').trim();
+      if (!t) continue;
+      if (t.includes('?')) continue;
+      valid.push(t);
+      if (valid.length === 9) break;
+    }
+    while (valid.length < 9) valid.push('—');
+    return valid;
+  }
+
+  let answers = new Array(9).fill('—');
+
+  document.getElementById('parseNextBtn').addEventListener('click', () => {
+    answers = parseAnswers(pasteInput.value);
+    renderResultGrid();
+    goto('result');
+  });
+
+  // ---------------------------------------------------------------------
+  // RESULT — photo grid
+  // ---------------------------------------------------------------------
+  const resultGrid = document.getElementById('resultGrid');
+  const cellState = new Array(9).fill(null); // { kind:'photo', url, blobUrl, credit, creditHref } | { kind:'gradient', css } | null
+
+  function hashHue(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return h % 360;
+  }
+  function gradientFor(word) {
+    const hue = hashHue(word || '');
+    const hue2 = (hue + 42) % 360;
+    return {
+      css: `linear-gradient(160deg, hsl(${hue} 55% 80%), hsl(${hue2} 45% 64%))`,
+      hue, hue2,
+    };
+  }
+
+  function withReferral(url) {
+    try {
+      const u = new URL(url);
+      if (!u.searchParams.has('utm_source')) u.searchParams.set('utm_source', 'nine_pieces_of_me');
+      if (!u.searchParams.has('utm_medium')) u.searchParams.set('utm_medium', 'referral');
+      return u.toString();
+    } catch { return url; }
+  }
+
+  async function fetchUnsplashPhoto(word, { bypassCache = false, page = 1 } = {}) {
+    if (!bypassCache) {
+      const cached = getCached(word);
+      if (cached) return cached;
+    }
+    const key = getApiKey();
+    if (!key) return null;
+    const enWord = KO_EN_MAP[word.trim()] || word.trim();
+    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(enWord)}&per_page=3&page=${page}&orientation=squarish`;
+    const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
+    if (!res.ok) throw new Error('unsplash http ' + res.status);
+    const data = await res.json();
+    const pick = data.results && data.results[Math.floor(Math.random() * Math.min(3, data.results.length))];
+    if (!pick) return null;
+    const result = {
+      kind: 'photo',
+      url: pick.urls.small,
+      credit: `Photo by ${pick.user.name} on Unsplash`,
+      creditHref: withReferral(pick.user.links.html),
+      unsplashHref: withReferral('https://unsplash.com/?utm_source=nine_pieces_of_me&utm_medium=referral'),
+    };
+    setCached(word, result);
+    return result;
+  }
+
+  // Fetch once as a Blob so the same bytes can back both the <img> and the
+  // export canvas without ever tainting the canvas with a cross-origin src.
+  async function toBlobUrl(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('image fetch ' + res.status);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  function cellMarkup(i) {
+    const { label } = QUESTIONS[i];
+    const accent = i % 2 === 0 ? 'var(--accent-a)' : 'var(--accent-b)';
+    return `
+      <div class="cell" data-i="${i}">
+        <div class="cell-tag" style="background:${accent}">${label}</div>
+        <div class="cell-refresh" data-refresh="${i}" title="다른 사진">⟳</div>
+        <div class="cell-count">${i + 1}/9</div>
+        <div class="cell-body" style="color:${accent}">
+          <div class="cell-empty-icon"></div>
+          <div class="cell-caption">사진을 넣어주세요</div>
+        </div>
+      </div>`;
+  }
+
+  function renderResultGrid() {
+    resultGrid.innerHTML = QUESTIONS.map((_, i) => cellMarkup(i)).join('');
+    resultGrid.querySelectorAll('[data-refresh]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = Number(btn.dataset.refresh);
+        loadCell(i, { bypassCache: true });
+      });
+    });
+    for (let i = 0; i < 9; i++) loadCell(i, {});
+  }
+
+  async function loadCell(i, opts) {
+    const cellEl = resultGrid.querySelector(`.cell[data-i="${i}"]`);
+    if (!cellEl) return;
+    const word = (answers[i] || '—').trim();
+    const body = cellEl.querySelector('.cell-body');
+    if (word === '—' || !word) {
+      cellState[i] = null;
+      return;
+    }
+    body.innerHTML = '<div class="cell-loading"></div>';
+    try {
+      const result = await fetchUnsplashPhoto(word, opts);
+      if (!result) throw new Error('no key or no result');
+      const blobUrl = await toBlobUrl(result.url);
+      cellState[i] = { ...result, blobUrl, word };
+      paintPhotoCell(cellEl, cellState[i]);
+    } catch {
+      const grad = gradientFor(word);
+      cellState[i] = { kind: 'gradient', ...grad, word };
+      paintGradientCell(cellEl, cellState[i]);
+    }
+  }
+
+  function paintPhotoCell(cellEl, state) {
+    cellEl.style.background = '';
+    const body = cellEl.querySelector('.cell-body');
+    if (body) body.remove();
+    let img = cellEl.querySelector('.cell-photo');
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'cell-photo';
+      img.alt = state.word;
+      cellEl.insertBefore(img, cellEl.firstChild);
+    }
+    img.src = state.blobUrl;
+    let credit = cellEl.querySelector('.cell-credit');
+    if (!credit) {
+      credit = document.createElement('div');
+      credit.className = 'cell-credit';
+      cellEl.appendChild(credit);
+    }
+    const nameMatch = /^Photo by (.+) on Unsplash$/.exec(state.credit);
+    const name = nameMatch ? nameMatch[1] : state.credit;
+    credit.innerHTML = `<a href="${state.creditHref}" target="_blank" rel="noopener noreferrer">${name}</a> · <a href="${state.unsplashHref}" target="_blank" rel="noopener noreferrer">Unsplash</a>`;
+  }
+
+  function paintGradientCell(cellEl, state) {
+    const oldImg = cellEl.querySelector('.cell-photo');
+    if (oldImg) oldImg.remove();
+    const oldCredit = cellEl.querySelector('.cell-credit');
+    if (oldCredit) oldCredit.remove();
+    cellEl.style.background = state.css;
+    let body = cellEl.querySelector('.cell-body');
+    if (!body) {
+      body = document.createElement('div');
+      body.className = 'cell-body';
+      cellEl.appendChild(body);
+    }
+    body.style.color = `hsl(${state.hue} 40% 30%)`;
+    body.innerHTML = `<div class="cell-empty-icon" style="border-color:currentColor"></div><div class="cell-caption" style="color:inherit;opacity:.75">${escapeHtml(state.word)}</div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ---------------------------------------------------------------------
+  // Export (save / copy) — composite the 9 cells into one PNG
+  // ---------------------------------------------------------------------
+  const toast = document.getElementById('resultToast');
+  let toastTimer = null;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  function drawCoverImage(ctx, img, x, y, w, h) {
+    const ir = img.naturalWidth / img.naturalHeight;
+    const r = w / h;
+    let sx, sy, sw, sh;
+    if (ir > r) {
+      sh = img.naturalHeight;
+      sw = sh * r;
+      sx = (img.naturalWidth - sw) / 2;
+      sy = 0;
+    } else {
+      sw = img.naturalWidth;
+      sh = sw / r;
+      sx = 0;
+      sy = (img.naturalHeight - sh) / 2;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function loadHtmlImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  async function buildCollageCanvas() {
+    const CELL = 320;
+    const GRID = CELL * 3;
+    const FOOT = 46;
+    const canvas = document.createElement('canvas');
+    canvas.width = GRID;
+    canvas.height = GRID + FOOT;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FDFBF7';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const credits = [];
+    for (let i = 0; i < 9; i++) {
+      const col = i % 3, row = Math.floor(i / 3);
+      const x = col * CELL, y = row * CELL;
+      const state = cellState[i];
+      if (state && state.kind === 'photo') {
+        try {
+          const img = await loadHtmlImage(state.blobUrl);
+          drawCoverImage(ctx, img, x, y, CELL, CELL);
+          const nameMatch = /^Photo by (.+) on Unsplash$/.exec(state.credit);
+          credits.push(nameMatch ? nameMatch[1] : state.credit);
+        } catch {
+          fillGradientCell(ctx, state || gradientFor(answers[i]), x, y, CELL);
+        }
+      } else {
+        fillGradientCell(ctx, (state && state.kind === 'gradient') ? state : gradientFor(answers[i]), x, y, CELL);
+      }
+      drawTag(ctx, QUESTIONS[i].label, x, y, i % 2 === 0 ? '#7D97AC' : '#90928B');
+    }
+
+    // grid lines
+    ctx.strokeStyle = 'rgba(27,27,22,.08)';
+    ctx.lineWidth = 1;
+    for (let k = 1; k < 3; k++) {
+      ctx.beginPath(); ctx.moveTo(k * CELL, 0); ctx.lineTo(k * CELL, GRID); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, k * CELL); ctx.lineTo(GRID, k * CELL); ctx.stroke();
+    }
+
+    // attribution footer (Unsplash terms: credit stays with any exported use)
+    ctx.fillStyle = '#6e6c66';
+    ctx.font = '11px sans-serif';
+    ctx.textBaseline = 'middle';
+    const footText = credits.length
+      ? `Photos via Unsplash — ${credits.join(', ')}`
+      : '아홉 조각의 나';
+    ctx.fillText(truncate(ctx, footText, GRID - 20), 10, GRID + FOOT / 2);
+
+    return canvas;
+  }
+
+  function truncate(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let t = text;
+    while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+    return t + '…';
+  }
+
+  function fillGradientCell(ctx, gradState, x, y, size) {
+    const hue = gradState.hue ?? 0, hue2 = gradState.hue2 ?? 40;
+    const g = ctx.createLinearGradient(x, y, x + size, y + size);
+    g.addColorStop(0, `hsl(${hue} 55% 80%)`);
+    g.addColorStop(1, `hsl(${hue2} 45% 64%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, size, size);
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawTag(ctx, label, cellX, cellY, color) {
+    ctx.font = '700 13px sans-serif';
+    const padX = 10, h = 24;
+    const w = ctx.measureText(label).width + padX * 2;
+    const x = cellX + 10, y = cellY + 10;
+    ctx.fillStyle = color;
+    roundRect(ctx, x, y, w, h, h / 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + padX, y + h / 2 + 1);
+  }
+
+  document.getElementById('saveImgBtn').addEventListener('click', async () => {
+    try {
+      const canvas = await buildCollageCanvas();
+      canvas.toBlob((blob) => {
+        if (!blob) { showToast('이미지를 만들 수 없어요'); return; }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '아홉_조각의_나.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        showToast('이미지를 저장했어요');
+      }, 'image/png');
+    } catch {
+      showToast('이미지를 만들 수 없어요');
+    }
+  });
+
+  document.getElementById('copyImgBtn').addEventListener('click', async () => {
+    try {
+      const canvas = await buildCollageCanvas();
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('no blob');
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('이미지를 복사했어요');
+      } else {
+        throw new Error('clipboard image unsupported');
+      }
+    } catch {
+      showToast('이 브라우저에서는 복사가 안 돼요. 저장을 이용해주세요');
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Settings modal
+  // ---------------------------------------------------------------------
+  const settingsModal = document.getElementById('settingsModal');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+
+  function openSettings() {
+    apiKeyInput.value = getApiKey();
+    settingsModal.classList.remove('hidden');
+  }
+  function closeSettings() { settingsModal.classList.add('hidden'); }
+
+  document.getElementById('settingsBtnCover').addEventListener('click', openSettings);
+  document.getElementById('settingsBtnResult').addEventListener('click', openSettings);
+  document.getElementById('closeSettingsBtn').addEventListener('click', closeSettings);
+  settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeSettings(); });
+
+  document.getElementById('saveKeyBtn').addEventListener('click', () => {
+    setApiKey(apiKeyInput.value.trim());
+    closeSettings();
+    showToastIfResultVisible('설정을 저장했어요');
+  });
+  document.getElementById('clearKeyBtn').addEventListener('click', () => {
+    setApiKey('');
+    apiKeyInput.value = '';
+    closeSettings();
+    showToastIfResultVisible('키를 삭제했어요');
+  });
+  function showToastIfResultVisible(msg) {
+    if (document.getElementById('screen-result').classList.contains('active')) showToast(msg);
+  }
+})();
+</script>
+</body>
+</html>
