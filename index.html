@@ -644,7 +644,12 @@
 
   // Strips leading numbering (1. / 1) / ① / Q: / A: / 답:) and drops
   // stray question lines that got pasted back in along with the answers.
-  const PREFIX_RE = /^\s*(\d+[.)]\s*|[①②③④⑤⑥⑦⑧⑨]\s*|q\s*[:：]\s*|a\s*[:：]\s*|답\s*[:：]\s*)/i;
+  const PREFIX_RE = /^\s*(\d+[.)]\s*|[①②③④⑤⑥⑦⑧⑨]\s*|[-*•]\s+|q\s*[:：]\s*|a\s*[:：]\s*|답\s*[:：]\s*)/i;
+  // AI replies routinely wrap a single-word answer in markdown emphasis
+  // or quotes ("**프리지어**", "*보라색*", "\`고양이\`", "\"떡볶이\"") -- strip
+  // that wrapping or the literal asterisks/quotes end up as part of the
+  // "word", which breaks every dictionary/seed lookup downstream.
+  const WRAP_RE = /^[*_`"'“”‘’]+|[*_`"'“”‘’]+$/g;
   function parseAnswers(raw) {
     const lines = raw.split(/\r?\n/);
     const valid = [];
@@ -652,6 +657,7 @@
       let t = line.trim();
       if (!t) continue;
       t = t.replace(PREFIX_RE, '').trim();
+      t = t.replace(WRAP_RE, '').trim();
       if (!t) continue;
       if (t.includes('?')) continue;
       valid.push(t);
