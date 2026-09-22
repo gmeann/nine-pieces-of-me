@@ -423,11 +423,12 @@
         <button class="icon-btn on-light" id="closeSettingsBtn" aria-label="닫기" style="width:22px;height:22px;font-size:12px">✕</button>
       </div>
       <p class="modal-desc">
-        결과 화면에서 9개 단어에 맞는 실제 사진을 보여주려면 Unsplash Access Key가 필요해요.
-        키는 <b>이 브라우저에만</b> 저장되고 서버로 전송되거나 코드에 저장되지 않아요.
-        키가 없으면 단어 기반 그라데이션 카드로 대신 보여드려요.
+        기본으로 모두가 같이 쓰는 공용 Unsplash 키가 이미 적용돼 있어서, 별도 입력 없이도 사진이 떠요.
+        공용 키가 사용량 한도에 걸렸거나 내 계정 사용량을 따로 쓰고 싶으면 아래에 <b>내 개인 키</b>를 넣어주세요 —
+        입력하면 이 브라우저에서는 그 이후로 공용 키 대신 우선 사용돼요. 개인 키는 <b>이 브라우저에만</b> 저장되고
+        서버로 전송되거나 코드에 저장되지 않아요.
       </p>
-      <input class="modal-input" id="apiKeyInput" type="text" placeholder="Unsplash Access Key" autocomplete="off" spellcheck="false">
+      <input class="modal-input" id="apiKeyInput" type="text" placeholder="개인 Unsplash Access Key (선택)" autocomplete="off" spellcheck="false">
       <div class="modal-actions">
         <button class="btn-secondary" id="clearKeyBtn">삭제</button>
         <button class="btn-primary" id="saveKeyBtn" style="width:auto">저장</button>
@@ -534,8 +535,19 @@
   const LS_KEY_CACHE = 'ninePieces.photoCache';
   const LS_KEY_RATELIMIT = 'ninePieces.unsplashRateLimit';
 
-  function getApiKey() {
+  // Shared default key so photos work for every visitor with zero setup --
+  // an Unsplash Access Key is meant to be used straight from client-side
+  // JS (it's sent in a plain Authorization header on every request, so
+  // it's already fully visible to anyone who opens devtools; this is not
+  // a secret in the way a server API key would be). A visitor's own key,
+  // if they set one below, always takes priority over this default.
+  const SHARED_UNSPLASH_KEY = 'NnT-SuM4ukgkOEHN2I1igjkfU81YMEVezh6VWeC7Qek';
+
+  function getPersonalApiKey() {
     try { return localStorage.getItem(LS_KEY_API) || ''; } catch { return ''; }
+  }
+  function getApiKey() {
+    return getPersonalApiKey() || SHARED_UNSPLASH_KEY;
   }
   function setApiKey(v) {
     try {
@@ -1026,7 +1038,7 @@
   const apiKeyInput = document.getElementById('apiKeyInput');
 
   function openSettings() {
-    apiKeyInput.value = getApiKey();
+    apiKeyInput.value = getPersonalApiKey();
     settingsModal.classList.remove('hidden');
     refreshAdminSections();
   }
