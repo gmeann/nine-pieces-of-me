@@ -549,6 +549,17 @@
   function getApiKey() {
     return getPersonalApiKey() || SHARED_UNSPLASH_KEY;
   }
+
+  // Pexels/Pixabay fallbacks — shared-default only for now (no personal-key
+  // override UI yet; their free tiers are generous enough that one shared
+  // key comfortably covers everyone). Empty string = provider skipped, so
+  // this is safe to ship ahead of actually having the keys: fetchPhotoFor()
+  // just falls through to the next provider exactly as it does today.
+  const SHARED_PEXELS_KEY = '';
+  const SHARED_PIXABAY_KEY = '';
+  function getPexelsKey() { return SHARED_PEXELS_KEY; }
+  function getPixabayKey() { return SHARED_PIXABAY_KEY; }
+
   function setApiKey(v) {
     try {
       if (v) localStorage.setItem(LS_KEY_API, v);
@@ -716,16 +727,29 @@
     } catch { return url; }
   }
 
-  async function fetchUnsplashPhoto(word, { bypassCache = false, page = 1 } = {}) {
-    if (!bypassCache) {
-      const seeded = PHOTO_SEED[word.trim()];
-      if (seeded) return seeded;
-      const cached = getCached(word);
-      if (cached) return cached;
-    }
+  // ---------------------------------------------------------------------
+  // Photo providers — tried in order until one returns a result. Each
+  // provider function is live-fetch-only (no seed/cache lookup inside);
+  // that's centralized in fetchPhotoFor() below. A provider with no key
+  // configured (shared default AND personal both empty) returns null
+  // immediately and costs nothing, so adding Pexels/Pixabay keys later
+  // is a one-line change -- nothing else here needs to know they exist
+  // until then.
+  //
+  // Common result shape (all providers): { kind:'photo', url, credit,
+  // creditHref, sourceHref, downloadLocation }. `credit` is always
+  // "Photo by {name} on {Source}" -- paintPhotoCell()/buildCollageCanvas()
+  // parse the source name back out of it rather than needing a separate
+  // field, so it stays compatible with the ~90 entries already saved in
+  // photo-seed.json (which predate Pexels/Pixabay and use the older
+  // `unsplashHref` field name -- read as a fallback for `sourceHref`
+  // wherever a result is consumed).
+  // ---------------------------------------------------------------------
+
+  async function fetchFromUnsplash(word, { page = 1 } = {}) {
     const key = getApiKey();
     if (!key) return null;
-    const enWord = KO_EN_MAP[word.trim()] || word.trim();
+    const enWord = KO_EN_MAP[word] || word;
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(enWord)}&per_page=3&page=${page}&orientation=squarish`;
     const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
     captureRateLimit(res);
@@ -733,20 +757,86 @@
     const data = await res.json();
     const pick = data.results && data.results[Math.floor(Math.random() * Math.min(3, data.results.length))];
     if (!pick) return null;
-    const result = {
+    return {
       kind: 'photo',
       url: pick.urls.small,
       credit: `Photo by ${pick.user.name} on Unsplash`,
       creditHref: withReferral(pick.user.links.html),
-      unsplashHref: withReferral('https://unsplash.com/?utm_source=nine_pieces_of_me&utm_medium=referral'),
+      sourceHref: withReferral('https://unsplash.com/?utm_source=nine_pieces_of_me&utm_medium=referral'),
       // Unsplash guideline: ping this whenever a photo is actually shown
       // as part of the app's experience, not just previewed in search —
-      // see trackDownload(). Absent from seeded/cached entries created
-      // before this field existed, which trackDownload() already guards.
+      // see trackDownload(). Pexels/Pixabay have no equivalent, so their
+      // results simply leave this null.
       downloadLocation: (pick.links && pick.links.download_location) || null,
     };
-    setCached(word, result);
-    return result;
+  }
+
+  // Pexels: no attribution/UTM/download-tracking requirement (unlike
+  // Unsplash), but a credit line is still shown as a courtesy. Free tier
+  // is 200 req/hour, well above Unsplash's 50 -- a useful safety valve
+  // once Unsplash's shared quota is spent for the hour.
+  async function fetchFromPexels(word) {
+    const key = getPexelsKey();
+    if (!key) return null;
+    const enWord = KO_EN_MAP[word] || word;
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(enWord)}&per_page=1&orientation=square`;
+    const res = await fetch(url, { headers: { Authorization: key } });
+    if (!res.ok) throw new Error('pexels http ' + res.status);
+    const data = await res.json();
+    const pick = data.photos && data.photos[0];
+    if (!pick) return null;
+    return {
+      kind: 'photo',
+      url: pick.src.medium,
+      credit: `Photo by ${pick.photographer} on Pexels`,
+      creditHref: pick.photographer_url,
+      sourceHref: pick.url,
+      downloadLocation: null,
+    };
+  }
+
+  // Pixabay: same deal as Pexels (no required attribution), free tier is
+  // roughly 100 req/min -- the deepest fallback before giving up on a
+  // real photo and showing the gradient tile.
+  async function fetchFromPixabay(word) {
+    const key = getPixabayKey();
+    if (!key) return null;
+    const enWord = KO_EN_MAP[word] || word;
+    const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(enWord)}&image_type=photo&per_page=3&safesearch=true`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('pixabay http ' + res.status);
+    const data = await res.json();
+    const pick = data.hits && data.hits[0];
+    if (!pick) return null;
+    return {
+      kind: 'photo',
+      url: pick.webformatURL,
+      credit: `Photo by ${pick.user} on Pixabay`,
+      creditHref: `https://pixabay.com/users/${encodeURIComponent(pick.user)}-${pick.user_id}/`,
+      sourceHref: pick.pageURL,
+      downloadLocation: null,
+    };
+  }
+
+  const PHOTO_PROVIDERS = [fetchFromUnsplash, fetchFromPexels, fetchFromPixabay];
+
+  async function fetchPhotoFor(word, opts = {}) {
+    const w = word.trim();
+    if (!opts.bypassCache) {
+      const seeded = PHOTO_SEED[w];
+      if (seeded) return seeded;
+      const cached = getCached(w);
+      if (cached) return cached;
+    }
+    for (const provider of PHOTO_PROVIDERS) {
+      let result = null;
+      try { result = await provider(w, opts); } catch { result = null; }
+      if (result) {
+        setCached(w, result);
+        return result;
+      }
+    }
+    return null;
   }
 
   // Unsplash API guideline: whenever a photo is actually used/displayed
@@ -810,7 +900,7 @@
     }
     body.innerHTML = '<div class="cell-loading"></div>';
     try {
-      const result = await fetchUnsplashPhoto(word, opts);
+      const result = await fetchPhotoFor(word, opts);
       if (!result) throw new Error('no key or no result');
       const blobUrl = await toBlobUrl(result.url);
       cellState[i] = { ...result, blobUrl, word };
@@ -841,9 +931,11 @@
       credit.className = 'cell-credit';
       cellEl.appendChild(credit);
     }
-    const nameMatch = /^Photo by (.+) on Unsplash$/.exec(state.credit);
-    const name = nameMatch ? nameMatch[1] : state.credit;
-    credit.innerHTML = `<a href="${state.creditHref}" target="_blank" rel="noopener noreferrer">${name}</a> · <a href="${state.unsplashHref}" target="_blank" rel="noopener noreferrer">Unsplash</a>`;
+    const m = /^Photo by (.+) on (.+)$/.exec(state.credit);
+    const name = m ? m[1] : state.credit;
+    const sourceName = m ? m[2] : 'Unsplash';
+    const sourceHref = state.sourceHref || state.unsplashHref || '#';
+    credit.innerHTML = `<a href="${state.creditHref}" target="_blank" rel="noopener noreferrer">${name}</a> · <a href="${sourceHref}" target="_blank" rel="noopener noreferrer">${sourceName}</a>`;
   }
 
   function paintGradientCell(cellEl, state) {
@@ -925,7 +1017,7 @@
         try {
           const img = await loadHtmlImage(state.blobUrl);
           drawCoverImage(ctx, img, x, y, CELL, CELL);
-          const nameMatch = /^Photo by (.+) on Unsplash$/.exec(state.credit);
+          const nameMatch = /^Photo by (.+) on (.+)$/.exec(state.credit);
           credits.push(nameMatch ? nameMatch[1] : state.credit);
         } catch {
           fillGradientCell(ctx, state || gradientFor(answers[i]), x, y, CELL);
