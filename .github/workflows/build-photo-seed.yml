@@ -1,0 +1,40 @@
+name: Build photo seed
+
+on:
+  # Manual: Actions tab -> "Build photo seed" -> Run workflow.
+  workflow_dispatch: {}
+  # Auto-resume: Unsplash's demo-tier key caps this at 50 words/hour, so one
+  # run rarely finishes the whole dictionary. This picks up where the last
+  # run left off and no-ops (fast, no commit) once photo-seed.json is complete.
+  schedule:
+    - cron: '0 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch missing seed photos
+        env:
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+        run: node scripts/build-photo-seed.js
+
+      - name: Commit updated seed if changed
+        run: |
+          if git diff --quiet -- photo-seed.json; then
+            echo "No changes to photo-seed.json"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add photo-seed.json
+          git commit -m "Update photo-seed.json [skip ci]"
+          git push
