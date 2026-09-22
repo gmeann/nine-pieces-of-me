@@ -459,6 +459,19 @@
   };
 
   // ---------------------------------------------------------------------
+  // Pre-seeded photos — built offline by scripts/build-photo-seed.js and
+  // shipped alongside index.html. Shared by every visitor: a word that's
+  // in here needs no API key and no live request at all. Loaded once,
+  // best-effort (a missing/failed fetch just leaves it empty and the app
+  // falls through to the live API / gradient path as before).
+  // ---------------------------------------------------------------------
+  let PHOTO_SEED = {};
+  fetch('./photo-seed.json')
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((data) => { PHOTO_SEED = data || {}; })
+    .catch(() => {});
+
+  // ---------------------------------------------------------------------
   // Persistence helpers (all client-side; never sent anywhere)
   // ---------------------------------------------------------------------
   const LS_KEY_API = 'ninePieces.unsplashKey';
@@ -612,6 +625,8 @@
 
   async function fetchUnsplashPhoto(word, { bypassCache = false, page = 1 } = {}) {
     if (!bypassCache) {
+      const seeded = PHOTO_SEED[word.trim()];
+      if (seeded) return seeded;
       const cached = getCached(word);
       if (cached) return cached;
     }
@@ -630,9 +645,26 @@
       credit: `Photo by ${pick.user.name} on Unsplash`,
       creditHref: withReferral(pick.user.links.html),
       unsplashHref: withReferral('https://unsplash.com/?utm_source=nine_pieces_of_me&utm_medium=referral'),
+      // Unsplash guideline: ping this whenever a photo is actually shown
+      // as part of the app's experience, not just previewed in search —
+      // see trackDownload(). Absent from seeded/cached entries created
+      // before this field existed, which trackDownload() already guards.
+      downloadLocation: (pick.links && pick.links.download_location) || null,
     };
     setCached(word, result);
     return result;
+  }
+
+  // Unsplash API guideline: whenever a photo is actually used/displayed
+  // (not just returned from search), ping links.download_location so it
+  // counts toward the photographer's official download stats. Requires
+  // the viewer's own key (the ping itself needs Authorization) — seeded
+  // photos shown to a visitor with no key configured simply skip this,
+  // same as they skip every other authenticated call.
+  function trackDownload(state) {
+    const key = getApiKey();
+    if (!key || !state || !state.downloadLocation) return;
+    fetch(state.downloadLocation, { headers: { Authorization: `Client-ID ${key}` } }).catch(() => {});
   }
 
   // Fetch once as a Blob so the same bytes can back both the <img> and the
@@ -687,6 +719,7 @@
       const blobUrl = await toBlobUrl(result.url);
       cellState[i] = { ...result, blobUrl, word };
       paintPhotoCell(cellEl, cellState[i]);
+      trackDownload(result);
     } catch {
       const grad = gradientFor(word);
       cellState[i] = { kind: 'gradient', ...grad, word };
